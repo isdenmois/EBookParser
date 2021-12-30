@@ -18,7 +18,7 @@ class EPUBParserInstrumentedTest {
 
         assertNotNull(eBookFile!!)
         assertEquals("A Darker Shade of Magic", eBookFile.title)
-        assertNull(eBookFile.author)
+        assertEquals("V.E Schwab", eBookFile.author)
         assertNotNull(eBookFile.cover)
         assertNotNull(eBookFile.file)
     }
@@ -32,7 +32,7 @@ class EPUBParserInstrumentedTest {
 
         assertNotNull(eBookFile!!)
         assertEquals("The Stand", eBookFile.title)
-        assertNull(eBookFile.author)
+        assertEquals("Stephen King", eBookFile.author)
         assertNotNull(eBookFile.cover)
         assertNotNull(eBookFile.file)
     }
@@ -46,7 +46,7 @@ class EPUBParserInstrumentedTest {
 
         assertNotNull(eBookFile!!)
         assertEquals("Gentlemen and Players", eBookFile.title)
-        assertNull(eBookFile.author)
+        assertNotNull(eBookFile.author)
         assertNotNull(eBookFile.cover)
         assertNotNull(eBookFile.file)
     }

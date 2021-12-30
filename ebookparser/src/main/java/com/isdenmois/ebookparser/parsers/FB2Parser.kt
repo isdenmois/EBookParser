@@ -13,6 +13,7 @@ import java.io.FileInputStream
 import java.io.InputStream
 import java.util.zip.ZipFile
 import com.isdenmois.ebookparser.EBookFile
+import java.lang.StringBuilder
 
 class FB2Parser(private val file: File) : BookParser {
     private var stream: InputStream? = null
@@ -32,6 +33,7 @@ class FB2Parser(private val file: File) : BookParser {
         var decode: ByteArray? = null
         var bitmap: Bitmap? = null
         var title: String? = null
+        var author: String? = null
 
         while (eventType != XmlPullParser.END_DOCUMENT) {
             val tagname = xpp.name
@@ -41,6 +43,11 @@ class FB2Parser(private val file: File) : BookParser {
                     if (title == null && tagname == "book-title") {
                         title = xpp.nextText()
                     }
+
+                    if (author === null && tagname == "author") {
+                        author = getInnerText(xpp)
+                    }
+
                     if (imageID == null && tagname == "image") {
                         imageID = xpp.getAttributeValue(0);
 
@@ -75,6 +82,7 @@ class FB2Parser(private val file: File) : BookParser {
 
         return EBookFile(
             title = title ?: file.name,
+            author = author,
             file = file,
             cover = bitmap,
         )
@@ -100,5 +108,27 @@ class FB2Parser(private val file: File) : BookParser {
         parser.setInput(stream, "UTF-8")
 
         return parser
+    }
+
+    private fun getInnerText(xpp: XmlPullParser, delimeter: String = " "): String {
+        val sb = StringBuilder()
+        var depth = 1
+        while (depth != 0) {
+            when (xpp.next()) {
+                XmlPullParser.END_TAG -> {
+                    depth--
+                }
+                XmlPullParser.START_TAG -> {
+                    depth++
+
+                    if (sb.isNotEmpty()) {
+                        sb.append(delimeter)
+                    }
+                }
+                else -> sb.append(xpp.text?.trim())
+            }
+        }
+
+        return sb.toString()
     }
 }

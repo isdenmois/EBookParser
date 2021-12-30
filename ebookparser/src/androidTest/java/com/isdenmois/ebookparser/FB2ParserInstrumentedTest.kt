@@ -18,7 +18,7 @@ class FB2ParserInstrumentedTest {
 
         assertNotNull(eBookFile!!)
         assertEquals("Норвежский лес", eBookFile.title)
-        assertNull(eBookFile.author)
+        assertEquals("Харуки Мураками", eBookFile.author)
         assertNotNull(eBookFile.cover)
         assertNotNull(eBookFile.file)
     }
@@ -32,7 +32,7 @@ class FB2ParserInstrumentedTest {
 
         assertNotNull(eBookFile!!)
         assertEquals("Гарри Поттер и философский камень", eBookFile.title)
-        assertNull(eBookFile.author)
+        assertEquals("Джоан Роулинг", eBookFile.author)
         assertNotNull(eBookFile.cover)
         assertNotNull(eBookFile.file)
     }

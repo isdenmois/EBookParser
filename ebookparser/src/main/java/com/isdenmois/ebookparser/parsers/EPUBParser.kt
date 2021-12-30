@@ -39,6 +39,7 @@ class EPUBParser(private val file: File) : BookParser {
             var eventType = xpp.eventType
 
             var title: String? = null
+            var author: String? = null
             var imageID: String? = null
             var coverPath: String? = null
 
@@ -49,6 +50,10 @@ class EPUBParser(private val file: File) : BookParser {
                     XmlPullParser.START_TAG -> {
                         if (title == null && tagname == "dc:title") {
                             title = xpp.nextText()
+                        }
+
+                        if (author == null && tagname == "dc:creator") {
+                            author = xpp.nextText()
                         }
 
                         if (imageID == null && tagname == "meta") {
@@ -82,6 +87,7 @@ class EPUBParser(private val file: File) : BookParser {
 
             return EBookFile(
                 title = title ?: file.name,
+                author = author,
                 file = file,
                 cover = cover,
             )
