@@ -43,7 +43,7 @@ class EPUBParser(private val file: File) : BookParser {
             var coverPath: String? = null
 
             while (eventType != XmlPullParser.END_DOCUMENT) {
-                val tagname = xpp.name
+                val tagname = xpp.name?.replace("opf:", "")
 
                 when (eventType) {
                     XmlPullParser.START_TAG -> {
@@ -57,15 +57,13 @@ class EPUBParser(private val file: File) : BookParser {
                             }
                         }
 
-                        if (imageID != null && tagname == "item" && imageID == xpp.getAttributeValue(null, "id")) {
+                        if (tagname == "item" && isCover(xpp, imageID)) {
                             coverPath = xpp.getAttributeValue(null, "href")
                             if (opfPath!!.contains('/')) {
                                 coverPath = "${opfPath!!.substring(0, opfPath!!.lastIndexOf('/'))}/$coverPath"
                             }
                             break;
                         }
-                    }
-                    else -> {
                     }
                 }
 
@@ -88,7 +86,17 @@ class EPUBParser(private val file: File) : BookParser {
                 cover = cover,
             )
         }
+    }
 
+    private fun isCover(xpp: XmlPullParser, imageID: String?): Boolean {
+        if (imageID != null) {
+            return imageID == xpp.getAttributeValue(null, "id")
+        }
+
+        val href = xpp.getAttributeValue(null, "href") ?: return false
+        val mediaType = xpp.getAttributeValue(null, "media-type") ?: return false
+
+        return href.contains("cover", true) && mediaType.startsWith("image/", true)
     }
 
     private fun getXpp(): XmlPullParser? {
