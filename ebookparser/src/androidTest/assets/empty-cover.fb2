@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FictionBook xmlns:l="http://www.w3.org/1999/xlink" xmlns="http://www.gribuser.ru/xml/fictionbook/2.0">
+<description>
+  <title-info>
+    <genre>prose_contemporary</genre>
+    <author>
+      <first-name>Макс</first-name>
+      <last-name>Фрай</last-name>
+    </author>
+    <book-title>Все ок</book-title>
+    <annotation>
+      <p>Тесто</p>
+    </annotation>
+    <keywords>философская проза,современное общество,японская литература</keywords>
+    <date value="1987-01-01">1987</date>
+    <lang>ru</lang>
+    <src-lang>ja</src-lang>
+  </title-info>
+</description>
+<body></body>
+</FictionBook>
