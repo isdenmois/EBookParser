@@ -14,10 +14,6 @@ class EPUBParserInstrumentedTest {
     @Test
     fun parseEpubPlain() {
         val file = TestFileLoader.loadFile("plain.epub")
-
-        expectThat(file).exists()
-        expectThat(file).isRegularFile()
-
         val eBookFile = EBookParser.parseBook(file)
 
         expectThat(eBookFile).isNotNull()
@@ -31,8 +27,6 @@ class EPUBParserInstrumentedTest {
     @Test
     fun parseEpubWithArtWorkOnly() {
         val file = TestFileLoader.loadFile("artwork.epub")
-        expectThat(file).exists()
-
         val eBookFile = EBookParser.parseBook(file)
 
         expectThat(eBookFile).isNotNull()
@@ -45,8 +39,6 @@ class EPUBParserInstrumentedTest {
     @Test
     fun parseEpubNoCoverId() {
         val file = TestFileLoader.loadFile("no-cover-id.epub")
-        expectThat(file).exists()
-
         val eBookFile = EBookParser.parseBook(file)
 
         expectThat(eBookFile).isNotNull()
@@ -59,8 +51,6 @@ class EPUBParserInstrumentedTest {
     @Test
     fun parseWithNoCover() {
         val file = TestFileLoader.loadFile("empty-cover.epub")
-        expectThat(file).exists()
-
         val eBookFile = EBookParser.parseBook(file)
 
         expectThat(eBookFile).isNotNull()

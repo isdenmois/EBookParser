@@ -14,10 +14,6 @@ class FB2ParserInstrumentedTest {
     @Test
     fun parsePlain() {
         val file = TestFileLoader.loadFile("murakami.fb2")
-
-        expectThat(file).exists()
-        expectThat(file).isRegularFile()
-
         val eBookFile = EBookParser.parseBook(file)
 
         expectThat(eBookFile).isNotNull()
@@ -31,10 +27,6 @@ class FB2ParserInstrumentedTest {
     @Test
     fun parseZip() {
         val file = TestFileLoader.loadFile("hp1.fb2.zip")
-
-        expectThat(file).exists()
-        expectThat(file).isRegularFile()
-
         val eBookFile = EBookParser.parseBook(file)
 
         expectThat(eBookFile).isNotNull()
@@ -47,10 +39,6 @@ class FB2ParserInstrumentedTest {
     @Test
     fun parseWithNoCover() {
         val file = TestFileLoader.loadFile("empty-cover.fb2")
-
-        expectThat(file).exists()
-        expectThat(file).isRegularFile()
-
         val eBookFile = EBookParser.parseBook(file)
 
         expectThat(eBookFile).isNotNull()

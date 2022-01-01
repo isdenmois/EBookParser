@@ -2,6 +2,10 @@ package com.isdenmois.ebookparser
 
 import android.os.FileUtils
 import androidx.test.platform.app.InstrumentationRegistry
+import strikt.api.expectThat
+import strikt.java.exists
+import strikt.java.isDirectory
+import strikt.java.isRegularFile
 import java.io.File
 
 object TestFileLoader {
@@ -19,6 +23,9 @@ object TestFileLoader {
                 testInput.close()
             }
         }
+
+        expectThat(file).exists()
+        expectThat(file).isRegularFile()
 
         return file
     }
