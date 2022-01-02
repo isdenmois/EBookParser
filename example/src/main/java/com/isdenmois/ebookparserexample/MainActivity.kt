@@ -1,18 +1,14 @@
 package com.isdenmois.ebookparserexample
 
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
 import com.isdenmois.ebookparser.EBookParser
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOn
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
-import java.lang.Exception
 
 class MainActivity : AppCompatActivity() {
     private lateinit var textView: TextView
@@ -23,8 +19,16 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         textView = findViewById(R.id.tv1)
 
+        EBookParser.cacheDirectory = cacheDir
+
         activityScope.launch {
-            parseAssets().collect { addText(it.title) }
+            val start = System.currentTimeMillis()
+
+            addText(parseAssets().joinToString("\n") { it.title })
+
+            val time = System.currentTimeMillis() - start
+
+            Log.d("EBookParser", "Parse took $time")
         }
     }
 
@@ -32,17 +36,25 @@ class MainActivity : AppCompatActivity() {
         textView.append("\n$text")
     }
 
-    private fun parseAssets() = flow {
-        assets.list("")?.forEach {
-            val book = EBookParser.parseBook(getAssetFile(it))
+    private suspend fun parseAssets() = withContext(Dispatchers.Unconfined) {
+        assets.list("")?.map {
+            val file = getAssetFile(it)
+            val book = EBookParser.parseBook(file)
 
-            Log.d("EBookParser", book.toString())
-
-            if (book != null) {
-                emit(book)
-            }
+            return@map book
         }
-    }.flowOn(Dispatchers.Default)
+    }?.filterNotNull() ?: listOf()
+
+    private suspend fun parseAsyncAssets() = withContext(Dispatchers.Unconfined) {
+        assets.list("")?.map {
+            async {
+                val file = getAssetFile(it)
+                val book = EBookParser.parseBook(file)
+
+                return@async book
+            }
+        }?.awaitAll()
+    }?.filterNotNull() ?: listOf()
 
     private suspend fun getAssetFile(asset: String): File {
         val f = File(cacheDir, asset)

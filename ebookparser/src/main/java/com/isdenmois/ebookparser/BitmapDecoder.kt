@@ -2,6 +2,7 @@ package com.isdenmois.ebookparser
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import java.io.File
 import java.io.InputStream
 import kotlin.math.roundToInt
 
@@ -18,6 +19,46 @@ object BitmapDecoder {
         val bitmap = BitmapFactory.decodeStream(stream)
 
         return scaleBitmap(bitmap)
+    }
+
+    fun decodeAndCache(data: ByteArray, filename: String): Bitmap {
+        val bitmap = decodeByteArray(data)
+
+        saveBitmap(bitmap, filename)
+
+        return bitmap
+    }
+
+    fun decodeAndCache(stream: InputStream, filename: String): Bitmap {
+        val bitmap = decodeStream(stream)
+
+        saveBitmap(bitmap, filename)
+
+        return bitmap
+    }
+
+    fun fromFile(filename: String): Bitmap? {
+        if (EBookParser.cacheDirectory == null) return null
+        val cacheImage = getCacheFile(filename)
+
+        if (cacheImage.exists()) {
+            return decodeFile(cacheImage)
+        }
+
+        return null
+    }
+
+    private fun saveBitmap(bitmap: Bitmap, filename: String) {
+        if (EBookParser.cacheDirectory == null) return
+        val cacheImage = getCacheFile(filename)
+
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, cacheImage.outputStream())
+    }
+
+    private fun getCacheFile(filename: String) = File(EBookParser.cacheDirectory, "${filename}.jpg")
+
+    private fun decodeFile(file: File): Bitmap {
+        return BitmapFactory.decodeStream(file.inputStream())
     }
 
     private fun scaleBitmap(bitmap: Bitmap): Bitmap {

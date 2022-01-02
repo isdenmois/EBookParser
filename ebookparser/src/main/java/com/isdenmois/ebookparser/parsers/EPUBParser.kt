@@ -1,31 +1,37 @@
 package com.isdenmois.ebookparser.parsers
 
 import android.graphics.Bitmap
-import android.util.Log
 import com.isdenmois.ebookparser.BitmapDecoder
-import org.xmlpull.v1.XmlPullParser
-import org.xmlpull.v1.XmlPullParserFactory
-import java.io.File
-import java.io.InputStream
+import com.isdenmois.ebookparser.EBookFile
+import java.io.*
+import java.nio.charset.Charset
+import java.util.regex.Matcher
+import java.util.regex.Pattern
+import java.util.stream.Collectors
 import java.util.zip.ZipEntry
 import java.util.zip.ZipException
 import java.util.zip.ZipFile
 import javax.xml.parsers.DocumentBuilderFactory
 
-import com.isdenmois.ebookparser.EBookFile
-
 class EPUBParser(private val file: File) : BookParser {
+    companion object {
+        private const val MAX_XMLINFO_SIZE = 80
+
+        private val xmlEncoding = Pattern.compile("(?i).*encoding=[\"'](.*?)[\"'].*")
+        private val epubTitle = Pattern.compile("(?s)<dc:title.*?>(.*?)</dc:title>");
+        private val epubAuthor = Pattern.compile("(?s)<dc:creator.*?>(.*?)</dc:creator>")
+        private val epubCoverId = Pattern.compile("<meta.*?name=\"cover\".*?content=\"(.*?)\"|<meta.*?content=\"(.*?)\".*?name=\"cover\"")
+        private val epubCover = Pattern.compile("(?s)<embeddedcover>(.*?)</embeddedcover>")
+        private val coverImage = Pattern.compile("cover\\.png", Pattern.CASE_INSENSITIVE)
+    }
+
     private lateinit var zipFile: ZipFile
     private var opfPath: String? = null
-    private var xpp: XmlPullParser? = null
 
     override fun parse(): EBookFile? {
         if (!file.canRead()) {
             return null
         }
-        Log.d("EPUBParser", "Open file: $file.path")
-
-        val start = System.currentTimeMillis()
 
         try {
             zipFile = ZipFile(file)
@@ -35,83 +41,38 @@ class EPUBParser(private val file: File) : BookParser {
         }
 
         zipFile.use {
-            val xpp = getXpp() ?: return null
-            var eventType = xpp.eventType
+            return try {
+                val source = createSource()
 
-            var title: String? = null
-            var author: String? = null
-            var imageID: String? = null
-            var coverPath: String? = null
-
-            while (eventType != XmlPullParser.END_DOCUMENT) {
-                val tagname = xpp.name?.replace("opf:", "")
-
-                when (eventType) {
-                    XmlPullParser.START_TAG -> {
-                        if (title == null && tagname == "dc:title") {
-                            title = xpp.nextText()
-                        }
-
-                        if (author == null && tagname == "dc:creator") {
-                            author = xpp.nextText()
-                        }
-
-                        if (imageID == null && tagname == "meta") {
-                            if (xpp.getAttributeValue(null, "name") == "cover") {
-                                imageID = xpp.getAttributeValue(null, "content")
-                            }
-                        }
-
-                        if (tagname == "item" && isCover(xpp, imageID)) {
-                            coverPath = xpp.getAttributeValue(null, "href")
-                            if (opfPath!!.contains('/')) {
-                                coverPath = "${opfPath!!.substring(0, opfPath!!.lastIndexOf('/'))}/$coverPath"
-                            }
-                            break;
-                        }
-                    }
-                }
-
-                eventType = xpp.next()
+                EBookFile(
+                    title = parseTitle(source) ?: file.name,
+                    author = parseAuthor(source),
+                    file = file,
+                    cover = parseCover(source),
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
             }
-
-            val coverEntry = if (coverPath != null) zipFile.getEntry(coverPath) else null
-            val coverStream = if (coverEntry != null) zipFile.getInputStream(coverEntry) else getITunesArtwork()
-            var cover: Bitmap? = null
-
-            coverStream?.use {
-                cover = BitmapDecoder.decodeStream(coverStream)
-            }
-
-            Log.d("TextReader/EPUB", "Parse took " + (System.currentTimeMillis() - start))
-
-            return EBookFile(
-                title = title ?: file.name,
-                author = author,
-                file = file,
-                cover = cover,
-            )
         }
     }
 
-    private fun isCover(xpp: XmlPullParser, imageID: String?): Boolean {
-        if (imageID != null) {
-            return imageID == xpp.getAttributeValue(null, "id")
-        }
+    @Throws(IOException::class)
+    private fun createSource(): String {
+        val inputStream = getOpfStream() ?: return ""
+        val buffer = ByteArray(MAX_XMLINFO_SIZE)
+        inputStream.read(buffer, 0, buffer.size)
 
-        val href = xpp.getAttributeValue(null, "href") ?: return false
-        val mediaType = xpp.getAttributeValue(null, "media-type") ?: return false
+        val encoding = getXmlEncoding(buffer)
+        val prefix = String(buffer, encoding)
 
-        return href.contains("cover", true) && mediaType.startsWith("image/", true)
+        return prefix + BufferedReader(InputStreamReader(inputStream, encoding))
+            .lines()
+            .parallel()
+            .collect(Collectors.joining("\n"))
     }
 
-    private fun getXpp(): XmlPullParser? {
-        if (xpp != null) {
-            return xpp
-        }
-
-        val factory = XmlPullParserFactory.newInstance()
-        val parser = factory.newPullParser()
+    private fun getOpfStream(): InputStream? {
         val builderFactory = DocumentBuilderFactory.newInstance()
         val docBuilder = builderFactory.newDocumentBuilder()
         val container: ZipEntry = zipFile.getEntry("META-INF/container.xml") ?: return null
@@ -122,16 +83,60 @@ class EPUBParser(private val file: File) : BookParser {
             ?: return null
 
         val opfEntry = zipFile.getEntry(opfPath) ?: return null
-        val stream = zipFile.getInputStream(opfEntry)
-
-        parser.setInput(stream, "UTF-8")
-
-        return parser
+        return zipFile.getInputStream(opfEntry)
     }
 
-    private fun getITunesArtwork(): InputStream? {
-        val iTunesArtwork = zipFile.getEntry("iTunesArtwork") ?: return null
+    private fun getXmlEncoding(buffer: ByteArray): Charset {
+        val xmlHeader = String(buffer, 0, MAX_XMLINFO_SIZE, charset("ISO-8859-1"))
+        val matcher: Matcher = xmlEncoding.matcher(xmlHeader)
+        val encoding = if (matcher.find()) matcher.group(1) else "utf-8"
+        return charset(encoding)
+    }
 
-        return zipFile.getInputStream(iTunesArtwork)
+    private fun parseTitle(source: String) = epubTitle.matches(source)
+
+    private fun parseAuthor(source: String) = epubAuthor.matches(source)
+
+    private fun parseCover(source: String): Bitmap? {
+        val cached = BitmapDecoder.fromFile(file.name)
+
+        if (cached != null) {
+            return cached
+        }
+
+        val coverPath = getCoverPath(source)
+        val stream = getCover(coverPath) ?: return null
+
+        return BitmapDecoder.decodeAndCache(stream, file.name)
+    }
+
+    private fun getCoverPath(source: String) = epubCover.matches(source) ?: getCoverPathByCoverId(source)
+
+    private fun getCoverPathByCoverId(source: String): String? {
+        val matcher = epubCoverId.matcher(source)
+        if (!matcher.find()) return null
+        val coverId = matcher.group(1) ?: matcher.group(2) ?: return null
+
+        return Pattern.compile("item.*?href=\"(.*?)\".*?id=\"$coverId\"").matches(source)
+    }
+
+    private fun getCover(path: String?): InputStream? {
+        var coverPath = path
+
+        var coverEntry = if (coverPath != null) {
+            if (opfPath!!.contains('/')) {
+                coverPath = "${opfPath!!.substring(0, opfPath!!.lastIndexOf('/'))}/$coverPath"
+            }
+
+            zipFile.getEntry(coverPath)
+        } else null
+
+        if (coverEntry == null) coverEntry = getCoverFromImages() ?: return null
+
+        return zipFile.getInputStream(coverEntry)
+    }
+
+    private fun getCoverFromImages(): ZipEntry? {
+        return zipFile.getEntry("iTunesArtwork") ?: zipFile.getEntry(coverImage)
     }
 }
