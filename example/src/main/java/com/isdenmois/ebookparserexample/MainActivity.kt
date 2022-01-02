@@ -24,7 +24,7 @@ class MainActivity : AppCompatActivity() {
         activityScope.launch {
             val start = System.currentTimeMillis()
 
-            addText(parseAssets().joinToString("\n") { it.title })
+            addText(parseAssets().joinToString("\n") { "${it.title}; hasCover: ${it.cover != null}" })
 
             val time = System.currentTimeMillis() - start
 

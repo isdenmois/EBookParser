@@ -3,11 +3,11 @@ package com.isdenmois.ebookparser.parsers
 import android.graphics.Bitmap
 import com.isdenmois.ebookparser.BitmapDecoder
 import com.isdenmois.ebookparser.EBookFile
-import java.io.*
-import java.nio.charset.Charset
-import java.util.regex.Matcher
+import org.xmlpull.v1.XmlPullParser
+import org.xmlpull.v1.XmlPullParserFactory
+import java.io.File
+import java.io.InputStream
 import java.util.regex.Pattern
-import java.util.stream.Collectors
 import java.util.zip.ZipEntry
 import java.util.zip.ZipException
 import java.util.zip.ZipFile
@@ -15,18 +15,29 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 class EPUBParser(private val file: File) : BookParser {
     companion object {
-        private const val MAX_XMLINFO_SIZE = 80
-
-        private val xmlEncoding = Pattern.compile("(?i).*encoding=[\"'](.*?)[\"'].*")
-        private val epubTitle = Pattern.compile("(?s)<dc:title.*?>(.*?)</dc:title>");
-        private val epubAuthor = Pattern.compile("(?s)<dc:creator.*?>(.*?)</dc:creator>")
-        private val epubCoverId = Pattern.compile("<meta.*?name=\"cover\".*?content=\"(.*?)\"|<meta.*?content=\"(.*?)\".*?name=\"cover\"")
-        private val epubCover = Pattern.compile("(?s)<embeddedcover>(.*?)</embeddedcover>")
         private val coverImage = Pattern.compile("cover\\.png", Pattern.CASE_INSENSITIVE)
+
+        const val XML_ELEMENT_DCTITLE = "dc:title"
+        const val XML_ELEMENT_CREATOR = "dc:creator"
+        const val XML_ELEMENT_META = "meta"
+
+        const val XML_ELEMENT_MANIFESTITEM = "item"
+
+
+        private val xppFactory = XmlPullParserFactory.newInstance()
     }
 
     private lateinit var zipFile: ZipFile
     private var opfPath: String? = null
+    private val builderFactory = DocumentBuilderFactory.newInstance()
+    private val docBuilder = builderFactory.newDocumentBuilder()
+
+    private val metadata = object {
+        var title: String? = null
+        var author: String? = null
+        var coverId: String? = null
+        var coverPath: String? = null
+    }
 
     override fun parse(): EBookFile? {
         if (!file.canRead()) {
@@ -42,13 +53,24 @@ class EPUBParser(private val file: File) : BookParser {
 
         zipFile.use {
             return try {
-                val source = createSource()
+                val xpp = xppFactory.newPullParser()
+                xpp.setInput(getOpfStream(), "UTF-8")
+
+                while (xpp.next() != XmlPullParser.END_DOCUMENT) {
+                    if (xpp.eventType != XmlPullParser.START_TAG) continue
+                    when (xpp.name) {
+                        XML_ELEMENT_DCTITLE -> metadata.title = xpp.nextText()
+                        XML_ELEMENT_CREATOR -> metadata.author = xpp.nextText()
+                        XML_ELEMENT_META -> readMetaCover(xpp)
+                        XML_ELEMENT_MANIFESTITEM -> readManifestCover(xpp)
+                    }
+                }
 
                 EBookFile(
-                    title = parseTitle(source) ?: file.name,
-                    author = parseAuthor(source),
+                    title = metadata.title ?: file.name,
+                    author = metadata.author,
                     file = file,
-                    cover = parseCover(source),
+                    cover = getCover(),
                 )
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -57,24 +79,19 @@ class EPUBParser(private val file: File) : BookParser {
         }
     }
 
-    @Throws(IOException::class)
-    private fun createSource(): String {
-        val inputStream = getOpfStream() ?: return ""
-        val buffer = ByteArray(MAX_XMLINFO_SIZE)
-        inputStream.read(buffer, 0, buffer.size)
+    private fun readMetaCover(xpp: XmlPullParser) {
+        if (xpp.getAttributeValue(null, "name") == "cover") {
+            metadata.coverId = xpp.getAttributeValue(null, "content")
+        }
+    }
 
-        val encoding = getXmlEncoding(buffer)
-        val prefix = String(buffer, encoding)
-
-        return prefix + BufferedReader(InputStreamReader(inputStream, encoding))
-            .lines()
-            .parallel()
-            .collect(Collectors.joining("\n"))
+    private fun readManifestCover(xpp: XmlPullParser) {
+        if (xpp.getAttributeValue(null, "id") == metadata.coverId) {
+            metadata.coverPath = xpp.getAttributeValue(null, "href")
+        }
     }
 
     private fun getOpfStream(): InputStream? {
-        val builderFactory = DocumentBuilderFactory.newInstance()
-        val docBuilder = builderFactory.newDocumentBuilder()
         val container: ZipEntry = zipFile.getEntry("META-INF/container.xml") ?: return null
 
         val doc = docBuilder.parse(zipFile.getInputStream(container))
@@ -86,42 +103,20 @@ class EPUBParser(private val file: File) : BookParser {
         return zipFile.getInputStream(opfEntry)
     }
 
-    private fun getXmlEncoding(buffer: ByteArray): Charset {
-        val xmlHeader = String(buffer, 0, MAX_XMLINFO_SIZE, charset("ISO-8859-1"))
-        val matcher: Matcher = xmlEncoding.matcher(xmlHeader)
-        val encoding = if (matcher.find()) matcher.group(1) else "utf-8"
-        return charset(encoding)
-    }
-
-    private fun parseTitle(source: String) = epubTitle.matches(source)
-
-    private fun parseAuthor(source: String) = epubAuthor.matches(source)
-
-    private fun parseCover(source: String): Bitmap? {
+    private fun getCover(): Bitmap? {
         val cached = BitmapDecoder.fromFile(file.name)
 
         if (cached != null) {
             return cached
         }
 
-        val coverPath = getCoverPath(source)
-        val stream = getCover(coverPath) ?: return null
+        val stream = getCoverStream() ?: return null
 
         return BitmapDecoder.decodeAndCache(stream, file.name)
     }
 
-    private fun getCoverPath(source: String) = epubCover.matches(source) ?: getCoverPathByCoverId(source)
-
-    private fun getCoverPathByCoverId(source: String): String? {
-        val matcher = epubCoverId.matcher(source)
-        if (!matcher.find()) return null
-        val coverId = matcher.group(1) ?: matcher.group(2) ?: return null
-
-        return Pattern.compile("item.*?href=\"(.*?)\".*?id=\"$coverId\"").matches(source)
-    }
-
-    private fun getCover(path: String?): InputStream? {
-        var coverPath = path
+    private fun getCoverStream(): InputStream? {
+        var coverPath = metadata.coverPath
 
         var coverEntry = if (coverPath != null) {
             if (opfPath!!.contains('/')) {
