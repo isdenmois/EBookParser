@@ -19,6 +19,7 @@ class FB2ParserKtTest {
         expectThat(array.findArrayIndex("<binary".toByteArray())).isEqualTo(13)
         expectThat(array.findArrayIndex("id=\"cover.jpg\"".toByteArray())).isEqualTo(21)
         expectThat(array.findArrayIndex("</binary>".toByteArray())).isEqualTo(40)
+        expectThat(array.findArrayIndex("</binary>h".toByteArray())).isEqualTo(-1)
     }
 
     @Test

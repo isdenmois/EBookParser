@@ -39,7 +39,7 @@ fun ByteArray.indexOfFrom(item: Byte, start: Int = 0, size: Int = this.size): In
 }
 
 fun hasSubarray(array: ByteArray, subarray: ByteArray, i: Int): Boolean {
-    if (array[i] == subarray[0]) {
+    if (array[i] == subarray[0] && array.size >= i + subarray.size) {
         for (j in subarray.indices) {
             if (array[i + j] != subarray[j]) {
                 return false
