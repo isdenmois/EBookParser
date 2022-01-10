@@ -8,6 +8,7 @@ import com.isdenmois.ebookparser.EBookFile
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
+import java.io.SequenceInputStream
 import java.nio.charset.Charset
 import java.util.regex.Matcher
 import java.util.regex.Pattern
@@ -16,7 +17,7 @@ open class FB2Parser(protected val file: File) : BookParser {
     companion object {
         private const val MAX_FB2INFO_SIZE = 8192
         private const val MAX_XMLINFO_SIZE = 80
-        private const val MAX_FB2_SIZE = 1_048_576
+        private const val MAX_FB2_SIZE = 524288
 
         private val xmlEncoding = Pattern.compile("(?i).*encoding=[\"'](.*?)[\"'].*")
         private val fb2Annotation = Pattern.compile("(?s)<annotation>(.*?)</annotation>")
@@ -25,6 +26,8 @@ open class FB2Parser(protected val file: File) : BookParser {
         private val fb2Author = Pattern.compile("(?s)<author>(.*?)</author>");
         private val fb2Title = Pattern.compile("(?s)<book-title>(.*?)</book-title>")
         private val fb2CoverName = Pattern.compile("(?s)<coverpage>.*href=\"#(.*?)\".*</coverpage>")
+        private val OPEN_TAG = '<'.code.toByte()
+        private val CLOSE_TAG = '>'.code.toByte()
     }
 
     private var annotation: String? = null
@@ -126,67 +129,30 @@ open class FB2Parser(protected val file: File) : BookParser {
         }
 
         val id = fb2CoverName.matches(source) ?: return null
+        val memStart = getMemoryConsumption()
         val decode = getCover(input, id) ?: return null
+        val memStop = getMemoryConsumption()
+        Log.d("EBookParser", "$memStart -> $memStop (${memStop - memStart})")
 
         return BitmapDecoder.decodeAndCache(decode, file.name)
     }
 
     private fun getCover(input: InputStream, id: String): ByteArray? {
-        readBuffer(input)
+        val stream = SequenceInputStream(buffer.inputStream(), input)
+        val cover64 = createByteInputParser(stream, MAX_FB2_SIZE) {
+            skipUntil("id=\"$id\"")
+            skipTo(CLOSE_TAG)
 
-        val stopBuffer = "</binary>".toByteArray()
-        val cover64: ByteArray
-        val idPosition = buffer.findArrayIndex("id=\"$id\"".toByteArray(), 0, amount)
-        if (idPosition < 0) return null
-
-        val start = buffer.indexOfFrom('>'.toByte(), idPosition, amount) + 1
-        if (start <= 0) return null
-
-        val stop = buffer.findArrayIndex(stopBuffer, start, amount + 1) - 1
-        if (stop < 0) return null
-
-        val newSize = stop - start + 1
-        cover64 = ByteArray(newSize)
-        System.arraycopy(buffer, start, cover64, 0, newSize)
+            takeUntil(OPEN_TAG)
+        } ?: return null
 
         return Base64.decode(cover64, Base64.DEFAULT)
     }
 
-    private fun readBuffer(input: InputStream) {
-        val binary = "<binary".toByteArray()
-        buffer = ByteArray(MAX_FB2_SIZE).also {
-            buffer.copyInto(it, 0, 0, amount)
-        }
+    private fun getMemoryConsumption(): Long {
+        val runtime = Runtime.getRuntime();
+        val usedMemInMB=(runtime.totalMemory() - runtime.freeMemory()) / 1048576L
 
-        try {
-            var count = 0
-
-            while (count != -1) {
-                count = input.read(buffer, amount, buffer.size - amount)
-
-                if (count != -1) {
-                    amount += count
-
-                    val binaryIndex = buffer.findArrayIndex(binary)
-
-                    if (binaryIndex < 0) {
-                        amount = 0
-                        Log.d("readBuffer", "binaryIndex < 0; amount=${amount}")
-                    } else if (binaryIndex > 0) {
-                        buffer.copyInto(buffer, 0, binaryIndex)
-                        amount -= binaryIndex
-                        Log.d("readBuffer", "binaryIndex >= 0; amount=${amount}")
-                    }
-
-                    if (amount >= buffer.size) {
-                        Log.d("readBuffer", "amount >= buffer.size; amount=${amount}")
-                        buffer = ByteArray(buffer.size * 2).also {
-                            buffer.copyInto(it, 0, 0, amount)
-                        }
-                    }
-                }
-            }
-        } catch (e: IOException) {
-        }
+        return usedMemInMB
     }
 }

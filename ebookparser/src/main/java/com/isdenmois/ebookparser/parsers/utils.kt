@@ -13,7 +13,7 @@ fun Pattern.matches(source: String): String? {
     return null
 }
 
-fun ByteArray.findArrayIndex(subarray: ByteArray, start: Int = 0, size: Int = this.size): Int {
+fun ByteArray.indexOf(subarray: ByteArray, start: Int = 0, size: Int = this.size): Int {
     if (size <= 0) return -1
     if (subarray.isEmpty()) return 0
 
@@ -26,12 +26,12 @@ fun ByteArray.findArrayIndex(subarray: ByteArray, start: Int = 0, size: Int = th
     return -1
 }
 
-fun ByteArray.indexOfFrom(item: Byte, start: Int = 0, size: Int = this.size): Int {
+fun ByteArray.indexOf(element: Byte, start: Int = 0, size: Int = this.size): Int {
     if (size <= 0) return -1
 
-    for (i in start until size) {
-        if (this[i] == item) {
-            return i
+    for (index in start until size) {
+        if (element == this[index]) {
+            return index
         }
     }
 
