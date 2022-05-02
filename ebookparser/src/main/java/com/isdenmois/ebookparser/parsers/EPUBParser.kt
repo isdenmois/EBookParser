@@ -15,7 +15,7 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 class EPUBParser(private val file: File) : BookParser {
     companion object {
-        private val coverImage = Pattern.compile("cover\\.png", Pattern.CASE_INSENSITIVE)
+        private val coverImage = Pattern.compile("cover\\.(jpg|jpeg|png)", Pattern.CASE_INSENSITIVE)
 
         const val XML_ELEMENT_DCTITLE = "dc:title"
         const val XML_ELEMENT_CREATOR = "dc:creator"
